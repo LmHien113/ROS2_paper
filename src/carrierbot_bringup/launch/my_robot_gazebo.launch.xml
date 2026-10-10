@@ -1,0 +1,4 @@
+<launch>
+    <!-- Keep the XML entry point aligned with the tested Python launch. -->
+    <include file="$(find-pkg-share carrierbot_bringup)/launch/my_robot_gazebo.launch.py" />
+</launch>
