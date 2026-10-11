@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Gửi một tuyến waypoint cho fablab_guidance_node, toạ độ tính theo vị trí xuất phát của xe.
+"""Gửi một tuyến waypoint cho guidance_test_node, toạ độ tính theo vị trí xuất phát của xe.
 
 Mỗi điểm viết dạng TOI,TRAI (mét) trong hệ toạ độ gắn với xe lúc bắt đầu:
 TOI = phía trước mũi xe, TRAI = bên trái xe (âm = bên phải).
@@ -8,13 +8,13 @@ Script đọc tư thế hiện tại một lần, đổi các điểm sang hệ 
 
 Ví dụ:
   # Đi thẳng 6 m
-  ros2 run carrierbot_navigation send_route.py 6,0
+  ros2 run carrierbot_guidance_test send_route.py 6,0
   # Đi thẳng 4 m rồi rẽ trái 90 độ, đi tiếp 4 m
-  ros2 run carrierbot_navigation send_route.py 4,0 4,4
+  ros2 run carrierbot_guidance_test send_route.py 4,0 4,4
   # Hình vuông 3 m, quay về điểm đầu
-  ros2 run carrierbot_navigation send_route.py 3,0 3,3 0,3 0,0
+  ros2 run carrierbot_guidance_test send_route.py 3,0 3,3 0,3 0,0
   # Chỉ in toạ độ, không gửi
-  ros2 run carrierbot_navigation send_route.py 4,0 4,4 --dry-run
+  ros2 run carrierbot_guidance_test send_route.py 4,0 4,4 --dry-run
 """
 
 import argparse
@@ -60,7 +60,7 @@ class RouteSender(Node):
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Gui tuyen waypoint (toa do theo vi tri xuat phat cua xe) cho fablab_guidance_node.')
+        description='Gui tuyen waypoint (toa do theo vi tri xuat phat cua xe) cho guidance.')
     parser.add_argument('points', nargs='+', type=parse_point, help='Cac diem TOI,TRAI tinh bang met')
     parser.add_argument('--pose-topic', default='/guidance_pose')
     parser.add_argument('--waypoint-topic', default='/fablab_waypoints')

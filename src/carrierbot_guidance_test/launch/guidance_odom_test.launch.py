@@ -1,19 +1,19 @@
 """Thử Guidance (LOS + PID) trên xe thật, KHÔNG dùng MQTT, AMCL, lidar, SLAM.
 
-Chạy:  phần cứng + controller + IMU + EKF + odom_to_pose + fablab_guidance_node.
+Chạy:  phần cứng + controller + IMU + EKF + odom_to_pose + guidance_test_node.
 Tư thế cho guidance lấy từ EKF (/odometry/filtered, khung odom) qua odom_to_pose.
-Waypoint gửi bằng tay:  ros2 run carrierbot_navigation send_route.py 4,0 4,4
+Waypoint gửi bằng tay:  ros2 run carrierbot_guidance_test send_route.py 4,0 4,4
 
 CẢNH BÁO: không có lidar nên KHÔNG có dừng tránh vật cản. Bắt buộc có người cầm
 nút dừng khẩn cấp (E-stop) và khu vực thử phải trống.
 
 Ví dụ:
-  ros2 launch carrierbot_bringup guidance_odom_test.launch.py
-  ros2 launch carrierbot_bringup guidance_odom_test.launch.py kp:=0.44 ki:=0.043 kd:=0.19
+  ros2 launch carrierbot_guidance_test guidance_odom_test.launch.py
+  ros2 launch carrierbot_guidance_test guidance_odom_test.launch.py kp:=0.44 ki:=0.043 kd:=0.19
   # Giả lập tần số cập nhật của AMCL (2 Hz) để so sánh:
-  ros2 launch carrierbot_bringup guidance_odom_test.launch.py pose_rate_hz:=2.0
+  ros2 launch carrierbot_guidance_test guidance_odom_test.launch.py pose_rate_hz:=2.0
   # Khi đã có node deadman cho tay cầm:
-  ros2 launch carrierbot_bringup guidance_odom_test.launch.py cmd_vel_topic:=/cmd_vel_auto
+  ros2 launch carrierbot_guidance_test guidance_odom_test.launch.py cmd_vel_topic:=/cmd_vel_auto
 """
 
 import os
@@ -90,7 +90,7 @@ def generate_launch_description():
     )
 
     odom_to_pose = Node(
-        package='carrierbot_navigation',
+        package='carrierbot_guidance_test',
         executable='odom_to_pose.py',
         name='odom_to_pose',
         output='screen',
@@ -102,9 +102,9 @@ def generate_launch_description():
     )
 
     guidance = Node(
-        package='carrierbot_navigation',
-        executable='fablab_guidance_node',
-        name='fablab_guidance_node',
+        package='carrierbot_guidance_test',
+        executable='guidance_test_node',
+        name='guidance_test_node',
         output='screen',
         parameters=[{
             'pose_topic': '/guidance_pose',

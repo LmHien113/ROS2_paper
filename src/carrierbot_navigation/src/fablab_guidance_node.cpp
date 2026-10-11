@@ -23,7 +23,6 @@ namespace
 {
 constexpr double kPi = 3.14159265358979323846;
 
-// Quy đổi góc thành -pi đến pi phù hợp với trục toạ độ
 double normalizeAngle(double angle)
 {
   angle = std::fmod(angle + kPi, 2.0 * kPi);
@@ -33,7 +32,6 @@ double normalizeAngle(double angle)
   return angle - kPi;
 }
 
-// Giới hạn giá trị max và min 
 double clamp(double value, double lower, double upper)
 {
   return std::max(lower, std::min(value, upper));
@@ -78,15 +76,7 @@ public:
     cycle_seconds_ = declare_parameter<double>("cycle", 0.1);
     max_linear_speed_ = declare_parameter<double>("linear_speed_max", 0.6);
     max_angular_speed_ = declare_parameter<double>("angular_speed_max", 0.8);
-    // Bộ điều khiển hướng PID. Mặc định giữ nguyên hành vi PD cũ (KP = angular_speed, KI = 0).
-    kp_ = declare_parameter<double>("KP", angular_speed_);
-    ki_ = declare_parameter<double>("KI", 0.0);
     kd_ = declare_parameter<double>("KD", 0.7);
-    // Giới hạn đóng góp của khâu I vào lệnh góc (rad/s), chống bão hoà tích phân.
-    integral_max_output_ = declare_parameter<double>("integral_max_output", 0.3);
-    // Chỉ tích phân khi |sai số hướng| nhỏ hơn ngưỡng này (rad), tránh vượt lố ở góc cua.
-    // Ngưỡng phải lớn hơn sai lệch tĩnh do nhiễu gây ra (xấp xỉ bias / KP).
-    integral_zone_ = declare_parameter<double>("integral_zone", 0.15);
     min_linear_speed_ = declare_parameter<double>("min_speed_linear", 0.3);
     direct_ = declare_parameter<double>("direct", 1.0);
     delta_min_ = declare_parameter<double>("delta_min", 0.5);
@@ -116,9 +106,7 @@ public:
       turn_heading_threshold_ <= 0.0 || turn_heading_max_speed_ <= 0.0 ||
       start_alignment_tolerance_ <= 0.0 ||
       start_alignment_threshold_ < start_alignment_tolerance_ ||
-      start_alignment_angular_speed_ <= 0.0 ||
-      kp_ < 0.0 || ki_ < 0.0 || kd_ < 0.0 ||
-      integral_max_output_ < 0.0 || integral_zone_ <= 0.0)
+      start_alignment_angular_speed_ <= 0.0)
     {
       throw std::runtime_error("Invalid Fablab guidance parameters");
     }
@@ -150,7 +138,7 @@ public:
       guidance_log_ <<
         "time_s,segment,amcl_x,amcl_y,amcl_yaw,start_x,start_y,goal_x,goal_y,"
         "cross_track,long_track,lookahead,target_heading,heading_error,remaining_distance,"
-        "linear_cmd,angular_cmd,safety_stop,finished,p_term,i_term,d_term\n";
+        "linear_cmd,angular_cmd,safety_stop,finished\n";
       RCLCPP_INFO(get_logger(), "Guidance CSV: %s", guidance_log_path_.c_str());
     } else {
       RCLCPP_WARN(get_logger(), "Cannot open guidance CSV: %s", guidance_log_path_.c_str());
@@ -158,9 +146,8 @@ public:
 
     RCLCPP_INFO(
       get_logger(),
-      "Fablab LOS-PID mode ready: goal_radius=%.2f m, cycle=%.2f s, "
-      "KP=%.3f KI=%.4f KD=%.3f, integral_zone=%.2f rad, integral_max_output=%.2f rad/s",
-      goal_radius_, cycle_seconds_, kp_, ki_, kd_, integral_zone_, integral_max_output_);
+      "Fablab LOS-PD mode ready: direct waypoint tracking, goal_radius=%.2f m, cycle=%.2f s",
+      goal_radius_, cycle_seconds_);
   }
 
 private:
@@ -215,8 +202,6 @@ private:
     waypoints_.emplace_back(x_, y_);
     current_segment_ = 0;
     finished_ = false;
-    // Nhiệm vụ mới: xoá toàn bộ trạng thái PID, kể cả tích phân.
-    resetPid(true);
     start_alignment_pending_ = true;
     start_alignment_active_ = false;
     RCLCPP_INFO(get_logger(), "Added Fablab start waypoint: (%.3f, %.3f)", x_, y_);
@@ -255,66 +240,32 @@ private:
     safety_stop_ = false;
   }
 
-  // Bộ điều khiển PID cho sai số hướng (rad) -> lệnh vận tốc góc (rad/s).
   double pid(double error)
   {
     const rclcpp::Time now = get_clock()->now();
-    double dt = pid_initialized_ ? (now - last_pid_time_).seconds() : cycle_seconds_;
-    dt = clamp(dt, 0.001, 0.5);
-
-    // Khâu D: lần gọi đầu sau khi reset không có sai số trước đó -> đạo hàm = 0,
-    // tránh xung đạo hàm (derivative kick). Giữ bộ lọc 0.2/0.8 như bản gốc.
-    const double derivative = pid_initialized_ ? (error - previous_error_) / dt : 0.0;
+    double dt = last_pid_time_.nanoseconds() == 0 ? 0.01 : (now - last_pid_time_).seconds();
+    dt = std::max(dt, 0.001);
+    const double derivative = (error - previous_error_) / dt;
+    // The original PID filters its derivative before multiplying by KD.
+    // Retaining this is important: without it this port turns substantially
+    // harder than the old Robot Fablab controller at a segment transition.
     filtered_derivative_ = 0.2 * derivative + 0.8 * filtered_derivative_;
-
-    // Khâu I: tích phân có điều kiện + giới hạn đầu ra + chống bão hoà.
-    double candidate = integral_;
-    if (ki_ > 0.0 && std::abs(error) < integral_zone_) {
-      const double integral_limit = integral_max_output_ / ki_;
-      candidate = clamp(integral_ + error * dt, -integral_limit, integral_limit);
-    }
-    const double unsaturated = kp_ * error + ki_ * candidate + kd_ * filtered_derivative_;
-    // Chỉ nhận giá trị tích phân mới khi lệnh chưa bão hoà, hoặc khi sai số
-    // đang kéo lệnh ra khỏi vùng bão hoà.
-    if (std::abs(unsaturated) < max_angular_speed_ || error * unsaturated < 0.0) {
-      integral_ = candidate;
-    }
-
-    p_term_ = kp_ * error;
-    i_term_ = ki_ * integral_;
-    d_term_ = kd_ * filtered_derivative_;
-
+    // Preserve the Robot Fablab PD call convention: angular_speed is Kp and
+    // KD is the derivative coefficient.
     previous_error_ = error;
     last_pid_time_ = now;
-    pid_initialized_ = true;
-    return p_term_ + i_term_ + d_term_;
-  }
-
-  // clear_integral = false khi chuyển đoạn: giữ tích phân vì nó bù sai lệch
-  // cố định của xe (ví dụ hai bánh không đều), chỉ xoá trạng thái đạo hàm.
-  void resetPid(bool clear_integral)
-  {
-    if (clear_integral) {
-      integral_ = 0.0;
-    }
-    filtered_derivative_ = 0.0;
-    previous_error_ = 0.0;
-    pid_initialized_ = false;
+    return angular_speed_ * error + kd_ * filtered_derivative_;
   }
 
   void controlLos(
     const std::pair<double, double> & goal,
     const std::pair<double, double> & previous)
   {
-    // Tính góc alpha giữa điểm hiện tại và điểm tiếp theo (góc tiếp tuyến quỹ đạo trong luận văn)
     const double alpha = std::atan2(goal.second - previous.second, goal.first - previous.first);
-    
-    // Tính độ dài của đoạn thẳng giữa điểm hiện tại và điểm tiếp theo
     const double segment_length =
       (goal.first - previous.first) * std::cos(alpha) +
       (goal.second - previous.second) * std::sin(alpha);
 
-    // Nếu đoạn thẳng quá ngắn (hoặc tới đích), đặt vận tốc về 0
     if (segment_length <= 1e-6) {
       remaining_distance_ = 0.0;
       linear_x_ = 0.0;
@@ -322,28 +273,16 @@ private:
       return;
     }
 
-    // Tính toạ độ của robot trên quỹ đạo
-    // Tính Ye
     const double cross_track =
       (-(x_ - previous.first) * std::sin(alpha) +
       (y_ - previous.second) * std::cos(alpha)) * direct_;
-    // Tính Xe
-      const double long_track =
+    const double long_track =
       (x_ - previous.first) * std::cos(alpha) +
       (y_ - previous.second) * std::sin(alpha);
-    // Tính khoảng nhìn trước Delta
-    // const double lookahead =
-    //   (delta_max_ - delta_min_) * std::exp(-0.7 * cross_track * cross_track) + delta_min_;
-    const double lookahead = 
-    (delta_max_ - delta_min_) * std::exp(-0.7* std::abs(cross_track)) + delta_min_;
-
-    // Luật điều khiển của LOS (quan trọng nhất trong thuật toán)
+    const double lookahead =
+      (delta_max_ - delta_min_) * std::exp(-0.7 * cross_track * cross_track) + delta_min_;
     target_heading_ = normalizeAngle(alpha + std::atan(-cross_track / lookahead));
-
-    // Tính sai số góc - lấy góc hướng mong muốn trừ đi góc hiện tại
     heading_error_ = normalizeAngle(target_heading_ - theta_);
-
-    //Update
     start_x_ = previous.first;
     start_y_ = previous.second;
     goal_x_ = goal.first;
@@ -403,8 +342,6 @@ private:
         if (std::abs(heading_error_) <= start_alignment_tolerance_) {
           start_alignment_active_ = false;
           start_alignment_pending_ = false;
-          // Sau khi xoay tại chỗ, bắt đầu lại khâu D để không bị xung đạo hàm.
-          resetPid(false);
         } else {
           linear_x_ = 0.0;
           angular_z_ = clamp(
@@ -435,8 +372,6 @@ private:
     if (remaining_distance_ <= reach_radius)
     {
       ++current_segment_;
-      // Sai số hướng nhảy bậc khi đổi đoạn: xoá trạng thái D, giữ tích phân.
-      resetPid(false);
       RCLCPP_INFO(get_logger(), "Reached Fablab waypoint %zu", current_segment_);
       if (current_segment_ + 1 >= waypoints_.size()) {
         linear_x_ = 0.0;
@@ -482,8 +417,7 @@ private:
                   << cross_track_ << ',' << long_track_ << ',' << lookahead_ << ','
                   << target_heading_ << ',' << heading_error_ << ',' << remaining_distance_ << ','
                   << command.linear.x << ',' << command.angular.z << ','
-                  << safety_stop_ << ',' << finished_ << ','
-                  << p_term_ << ',' << i_term_ << ',' << d_term_ << '\n';
+                  << safety_stop_ << ',' << finished_ << '\n';
     guidance_log_.flush();
   }
 
@@ -493,16 +427,7 @@ private:
   double cycle_seconds_{0.1};
   double max_linear_speed_{0.6};
   double max_angular_speed_{0.8};
-  double kp_{0.5};
-  double ki_{0.0};
   double kd_{0.7};
-  double integral_max_output_{0.3};
-  double integral_zone_{0.15};
-  double integral_{0.0};
-  double p_term_{0.0};
-  double i_term_{0.0};
-  double d_term_{0.0};
-  bool pid_initialized_{false};
   double min_linear_speed_{0.3};
   double direct_{1.0};
   double delta_min_{0.5};

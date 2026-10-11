@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Chuyển nav_msgs/Odometry (EKF) sang PoseWithCovarianceStamped cho fablab_guidance_node.
+"""Chuyển nav_msgs/Odometry (EKF) sang PoseWithCovarianceStamped cho guidance_test_node.
 
 Dùng khi thử Guidance trên xe thật mà không chạy AMCL: guidance chỉ nhận
 PoseWithCovarianceStamped, còn EKF phát nav_msgs/Odometry trên /odometry/filtered.
