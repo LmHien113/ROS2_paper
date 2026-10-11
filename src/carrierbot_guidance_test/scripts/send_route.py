@@ -87,7 +87,7 @@ def main():
         if args.dry_run:
             return 0
 
-        if not node.wait_for(lambda: node.publisher.get_subscription_count() > 0, 5.0):
+        if not node.wait_for(lambda: node.count_subscribers(args.waypoint_topic) > 0, 5.0):
             node.get_logger().error(f'Khong co node nao nghe {args.waypoint_topic}. Guidance da chay chua?')
             return 1
 
@@ -105,7 +105,9 @@ def main():
         return 0
     finally:
         node.destroy_node()
-        rclpy.try_shutdown()
+        # Foxy chưa có rclpy.try_shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == '__main__':
