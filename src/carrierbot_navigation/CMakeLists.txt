@@ -83,6 +83,13 @@ install(
   DESTINATION share/${PROJECT_NAME}
 )
 
+install(
+  PROGRAMS
+    scripts/odom_to_pose.py
+    scripts/send_route.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/scripts/cmd_vel_angular_inverter.py")
   install(
     PROGRAMS scripts/cmd_vel_angular_inverter.py
