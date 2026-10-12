@@ -30,6 +30,26 @@ carrierbot_guidance_test/
 Các package gốc (`carrierbot_firmware`, `carrierbot_controller`, `carrierbot_slam`)
 chỉ được **dùng lại**, không bị sửa.
 
+## Hardware interface thử nghiệm (dấu từng bánh)
+
+Package có bản sao riêng của hardware interface: `carrierbot_guidance_test::CarrierbotInterfaceTest`
+(`src/carrierbot_interface_test.cpp`, mô tả robot `urdf/carrierbot_test.urdf.xacro`).
+Khác bản gốc duy nhất ở chỗ dấu của từng bánh là tham số:
+
+| Tham số launch | Mặc định (test) | Bản gốc (cố định trong code) |
+| --- | --- | --- |
+| `left_command_sign` | `1` | `-1` |
+| `right_command_sign` | `1` | `1` |
+| `left_feedback_sign` | `-1` | `-1` |
+| `right_feedback_sign` | `1` | `1` |
+
+Ngày 12/10/2026, STM32 ở `drive_mode` 2 cho thấy cả hai bánh nhận giá trị dương là tiến,
+nên lệnh mặc định là `+1, +1`. Dấu encoder đọc về chưa được kiểm chứng: kê bánh, gửi lệnh
+thẳng và xem `/odom`. Nếu `twist.angular.z` khoảng ±0.35 khi lệnh là thẳng 0.1 m/s thì
+chạy lại với `left_feedback_sign:=1`.
+
+Log khởi động in ra dấu đang dùng: `[TEST] Configured hardware: ... sign cmd L=+1 R=+1, feedback L=-1 R=+1`.
+
 ## Build
 
 ```bash

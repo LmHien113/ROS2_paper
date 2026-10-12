@@ -16,6 +16,7 @@ Ví dụ:
   ros2 launch carrierbot_guidance_test guidance_odom_test.launch.py cmd_vel_topic:=/cmd_vel_auto
 """
 
+import glob
 import os
 
 from ament_index_python.packages import get_package_share_directory
@@ -23,7 +24,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, LogInfo, TimerAction
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import Command, LaunchConfiguration
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 
@@ -52,12 +53,45 @@ def generate_launch_description():
         arg('angular_speed_max', '0.5', 'Gioi han van toc goc (rad/s)'),
         arg('delta_min', '0.5', 'Khoang nhin truoc nho nhat (m)'),
         arg('delta_max', '0.8', 'Khoang nhin truoc lon nhat (m)'),
+        arg('can_port', next(iter(sorted(glob.glob('/dev/serial/by-id/usb-1a86_USB_Serial-*'))), '/dev/usbcan'),
+            'Cong serial cua bo chuyen USB-CAN'),
+        # Dau tung banh (+1/-1) cua hardware interface thu nghiem. Kiem tra bang drive_test khi ke banh.
+        # STM32 hien tai: ca hai banh duong = tien (thu ngay 12/10/2026), nen lenh de +1, +1.
+        arg('left_command_sign', '1', 'Dau lenh banh trai gui xuong STM32 (0x030)'),
+        arg('right_command_sign', '1', 'Dau lenh banh phai gui xuong STM32 (0x030)'),
+        arg('left_feedback_sign', '-1', 'Dau encoder banh trai doc ve (0x011)'),
+        arg('right_feedback_sign', '1', 'Dau encoder banh phai doc ve (0x011)'),
+        arg('imu_mode', '12', 'Che do BNO055: 12 = NDOF (co la ban), 8 = IMU (khong la ban)'),
     ]
 
-    hardware_interface = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(os.path.join(
-            get_package_share_directory('carrierbot_firmware'), 'launch', 'hardware_interface.launch.py')),
-        launch_arguments={'use_sim_time': 'false', 'drive_mode': LaunchConfiguration('drive_mode')}.items(),
+    # Phan cung: giong carrierbot_firmware/launch/hardware_interface.launch.py, nhung dung
+    # mo ta robot va plugin thu nghiem cua package nay (dau tung banh cau hinh duoc).
+    robot_description = ParameterValue(Command([
+        'xacro ',
+        os.path.join(get_package_share_directory('carrierbot_guidance_test'), 'urdf', 'carrierbot_test.urdf.xacro'),
+        ' drive_mode:=', LaunchConfiguration('drive_mode'),
+        ' can_port:=', LaunchConfiguration('can_port'),
+        ' left_command_sign:=', LaunchConfiguration('left_command_sign'),
+        ' right_command_sign:=', LaunchConfiguration('right_command_sign'),
+        ' left_feedback_sign:=', LaunchConfiguration('left_feedback_sign'),
+        ' right_feedback_sign:=', LaunchConfiguration('right_feedback_sign'),
+    ]), value_type=str)
+
+    robot_state_publisher = Node(
+        package='robot_state_publisher',
+        executable='robot_state_publisher',
+        parameters=[{'robot_description': robot_description}],
+    )
+
+    controller_manager = Node(
+        package='controller_manager',
+        executable='ros2_control_node',
+        output='screen',
+        parameters=[
+            {'robot_description': robot_description, 'use_sim_time': False},
+            os.path.join(get_package_share_directory('carrierbot_controller'), 'config', 'controller.yaml'),
+        ],
+        remappings=[('/carrierbot_controller/cmd_vel_unstamped', '/cmd_vel')],
     )
 
     controller = IncludeLaunchDescription(
@@ -77,6 +111,7 @@ def generate_launch_description():
             {'i2c_bus': 1},
             {'i2c_address': 40},
             {'frame_id': 'imu'},
+            {'operation_mode': ParameterValue(LaunchConfiguration('imu_mode'), value_type=int)},
         ],
         remappings=[('/bno055/imu', '/imu/data')],
         condition=IfCondition(LaunchConfiguration('use_imu')),
@@ -131,7 +166,13 @@ def generate_launch_description():
 
     return LaunchDescription(args + [
         LogInfo(msg='guidance_odom_test: KHONG co lidar, KHONG dung tranh vat can. Giu san nut E-stop.'),
-        hardware_interface,
+        LogInfo(msg=['Hardware TEST: drive_mode=', LaunchConfiguration('drive_mode'),
+                     ' sign cmd L/R=', LaunchConfiguration('left_command_sign'), '/',
+                     LaunchConfiguration('right_command_sign'),
+                     ' feedback L/R=', LaunchConfiguration('left_feedback_sign'), '/',
+                     LaunchConfiguration('right_feedback_sign')]),
+        robot_state_publisher,
+        controller_manager,
         imu,
         ekf,
         TimerAction(period=2.0, actions=[controller]),

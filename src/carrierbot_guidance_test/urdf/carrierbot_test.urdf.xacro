@@ -1,0 +1,53 @@
+<?xml version="1.0"?>
+<!--
+  Mo ta robot cho package test: dung lai hinh hoc cua carrierbot_description,
+  nhung phan ros2_control dung plugin thu nghiem carrierbot_guidance_test::CarrierbotInterfaceTest
+  (dau tung banh cau hinh duoc). Khong sua gi trong carrierbot_description.
+-->
+<robot name="my_robot" xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:arg name="is_ignition" default="false"/>
+  <xacro:arg name="is_sim" default="false"/>
+  <xacro:arg name="drive_mode" default="2"/>
+  <xacro:arg name="can_port" default="/dev/usbcan"/>
+  <xacro:arg name="left_command_sign" default="-1"/>
+  <xacro:arg name="right_command_sign" default="1"/>
+  <xacro:arg name="left_feedback_sign" default="-1"/>
+  <xacro:arg name="right_feedback_sign" default="1"/>
+
+  <xacro:include filename="$(find carrierbot_description)/urdf/common_properties.xacro" />
+  <xacro:include filename="$(find carrierbot_description)/urdf/mobile_base.xacro" />
+  <xacro:include filename="$(find carrierbot_description)/urdf/mobile_base_gazebo.xacro" />
+  <xacro:include filename="$(find carrierbot_description)/urdf/sensors.xacro" />
+
+  <ros2_control name="RobotSystem" type="system">
+    <hardware>
+      <plugin>carrierbot_guidance_test::CarrierbotInterfaceTest</plugin>
+      <param name="port">$(arg can_port)</param>
+      <param name="baudrate">2000000</param>
+      <param name="drive_mode">$(arg drive_mode)</param>
+      <param name="poll_period">0.05</param>
+      <param name="left_command_sign">$(arg left_command_sign)</param>
+      <param name="right_command_sign">$(arg right_command_sign)</param>
+      <param name="left_feedback_sign">$(arg left_feedback_sign)</param>
+      <param name="right_feedback_sign">$(arg right_feedback_sign)</param>
+    </hardware>
+
+    <joint name="base_right_wheel_joint">
+      <command_interface name="velocity">
+        <param name="min">-15.0</param>
+        <param name="max">15.0</param>
+      </command_interface>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+
+    <joint name="base_left_wheel_joint">
+      <command_interface name="velocity">
+        <param name="min">-15.0</param>
+        <param name="max">15.0</param>
+      </command_interface>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+  </ros2_control>
+</robot>

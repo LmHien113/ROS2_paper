@@ -17,6 +17,10 @@
   <depend>geometry_msgs</depend>
   <depend>sensor_msgs</depend>
   <depend>std_msgs</depend>
+  <depend>hardware_interface</depend>
+  <depend>pluginlib</depend>
+  <depend>rclcpp_lifecycle</depend>
+  <depend>carrierbot_msgs</depend>
 
   <exec_depend>rclpy</exec_depend>
   <exec_depend>nav_msgs</exec_depend>
@@ -27,6 +31,10 @@
   <exec_depend>carrierbot_firmware</exec_depend>
   <exec_depend>carrierbot_controller</exec_depend>
   <exec_depend>carrierbot_slam</exec_depend>
+  <exec_depend>carrierbot_description</exec_depend>
+  <exec_depend>robot_state_publisher</exec_depend>
+  <exec_depend>controller_manager</exec_depend>
+  <exec_depend>xacro</exec_depend>
 
   <export>
     <build_type>ament_cmake</build_type>

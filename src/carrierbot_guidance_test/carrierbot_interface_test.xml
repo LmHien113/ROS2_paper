@@ -1,0 +1,9 @@
+<library path="carrierbot_interface_test">
+    <class name="carrierbot_guidance_test::CarrierbotInterfaceTest"
+        type="carrierbot_guidance_test::CarrierbotInterfaceTest"
+        base_class_type="hardware_interface::SystemInterface">
+        <description>
+            Ban thu nghiem cua carrierbot_firmware::CarrierbotInterface: dau tung banh cau hinh duoc.
+        </description>
+    </class>
+</library>

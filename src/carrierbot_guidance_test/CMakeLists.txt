@@ -14,6 +14,10 @@ find_package(rclcpp REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(hardware_interface REQUIRED)
+find_package(pluginlib REQUIRED)
+find_package(rclcpp_lifecycle REQUIRED)
+find_package(carrierbot_msgs REQUIRED)
 
 # Bản thử nghiệm của fablab_guidance_node (tên khác để không trùng bản gốc)
 add_executable(guidance_test_node src/guidance_test_node.cpp)
@@ -22,6 +26,28 @@ ament_target_dependencies(guidance_test_node
   geometry_msgs
   sensor_msgs
   std_msgs
+)
+
+# Ban thu nghiem cua hardware interface (dau tung banh cau hinh duoc).
+# Ten lop khac ban goc: carrierbot_guidance_test::CarrierbotInterfaceTest
+add_library(carrierbot_interface_test SHARED src/carrierbot_interface_test.cpp)
+target_include_directories(carrierbot_interface_test PRIVATE include)
+target_compile_definitions(carrierbot_interface_test PRIVATE "PLUGINLIB__DISABLE_BOOST_FUNCTIONS")
+ament_target_dependencies(carrierbot_interface_test
+  hardware_interface
+  pluginlib
+  rclcpp
+  rclcpp_lifecycle
+  carrierbot_msgs
+  std_msgs
+)
+pluginlib_export_plugin_description_file(hardware_interface carrierbot_interface_test.xml)
+
+install(
+  TARGETS carrierbot_interface_test
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin
 )
 
 install(
@@ -39,7 +65,7 @@ install(
 )
 
 install(
-  DIRECTORY launch
+  DIRECTORY launch urdf
   DESTINATION share/${PROJECT_NAME}
 )
 
