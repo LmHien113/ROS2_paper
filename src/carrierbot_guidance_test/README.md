@@ -47,6 +47,11 @@ Khác bản gốc duy nhất ở chỗ dấu của từng bánh là tham số:
 Đã kiểm chứng ngày 12/10/2026 (STM32 ở `drive_mode` 2): cả lệnh gửi xuống lẫn encoder đọc về,
 hai bánh đều dương là tiến. So với firmware gốc, bánh trái không còn cần đảo dấu ở cả hai chiều.
 
+Lý do: STM32 đã tự đảo dấu bánh trái (`AUTO_SIGN_L = -1` trong `app_config.h`, áp cho cả lệnh 0x030,
+phản hồi 0x011/0x012 và lệnh xoay 0x040), nên ROS 2 chỉ cần dùng quy ước "dương = bánh quay tiến".
+Firmware ROS gốc đảo dấu bánh trái thêm lần nữa, thành ra hai lần đảo: lệnh đi thẳng biến thành xoay.
+Cần giữ `AUTO_SIGN_L = -1` trên STM32; nếu đổi thành `+1` thì phải đặt lại hai dấu bánh trái ở đây về `-1`.
+
 Log khởi động in ra dấu đang dùng: `[TEST] Configured hardware: ... sign cmd L=+1 R=+1, feedback L=+1 R=+1`.
 
 ## EKF thử nghiệm
