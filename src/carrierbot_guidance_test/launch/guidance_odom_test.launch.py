@@ -37,7 +37,8 @@ def generate_launch_description():
 
     args = [
         arg('use_imu', 'true', 'Chay driver IMU BNO055 (EKF dung yaw tu IMU)'),
-        arg('drive_mode', '1', 'Che do lai gui xuong driver qua CAN'),
+        # STM32: 0x020 byte dau = 2 la che do Auto (nhan van toc tu ROS qua 0x030). Gia tri khac se lai sai.
+        arg('drive_mode', '2', 'Che do lai gui qua CAN 0x020: 2 = Auto (dieu khien tu ROS)'),
         arg('cmd_vel_topic', '/cmd_vel',
             'Topic lenh van toc cua guidance. Doi thanh /cmd_vel_auto khi co node deadman'),
         arg('pose_rate_hz', '0.0', 'Tan so tu the cho guidance. 0 = ~30 Hz cua EKF, 2.0 = gia lap AMCL'),
