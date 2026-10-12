@@ -14,6 +14,7 @@ carrierbot_guidance_test/
 ├── scripts/odom_to_pose.py           # /odometry/filtered -> /guidance_pose
 ├── scripts/send_route.py             # gửi waypoint theo vị trí xuất phát của xe
 ├── launch/guidance_odom_test.launch.py
+├── config/ekf_test.yaml              # EKF: bánh xe góp vận tốc, IMU góp góc hướng
 └── data/                             # log guidance_test_*.csv
 ```
 
@@ -40,20 +41,25 @@ Khác bản gốc duy nhất ở chỗ dấu của từng bánh là tham số:
 | --- | --- | --- |
 | `left_command_sign` | `1` | `-1` |
 | `right_command_sign` | `1` | `1` |
-| `left_feedback_sign` | `-1` | `-1` |
+| `left_feedback_sign` | `1` | `-1` |
 | `right_feedback_sign` | `1` | `1` |
 
-Ngày 12/10/2026, STM32 ở `drive_mode` 2 cho thấy cả hai bánh nhận giá trị dương là tiến,
-nên lệnh mặc định là `+1, +1`. Dấu encoder đọc về chưa được kiểm chứng: kê bánh, gửi lệnh
-thẳng và xem `/odom`. Nếu `twist.angular.z` khoảng ±0.35 khi lệnh là thẳng 0.1 m/s thì
-chạy lại với `left_feedback_sign:=1`.
+Đã kiểm chứng ngày 12/10/2026 (STM32 ở `drive_mode` 2): cả lệnh gửi xuống lẫn encoder đọc về,
+hai bánh đều dương là tiến. So với firmware gốc, bánh trái không còn cần đảo dấu ở cả hai chiều.
 
-Log khởi động in ra dấu đang dùng: `[TEST] Configured hardware: ... sign cmd L=+1 R=+1, feedback L=-1 R=+1`.
+Log khởi động in ra dấu đang dùng: `[TEST] Configured hardware: ... sign cmd L=+1 R=+1, feedback L=+1 R=+1`.
+
+## EKF thử nghiệm
+
+`config/ekf_test.yaml` (tham số launch `ekf_config`) khác `carrierbot_slam/config/ekf.yaml`:
+bánh xe chỉ góp vận tốc, góc hướng lấy từ IMU tính tương đối so với lúc khởi động. Bản gốc gộp
+hai góc tuyệt đối không cùng gốc (bánh xe từ 0°, IMU theo la bàn), làm góc EKF tự trôi khi xe chạy:
+đi thẳng 2 m thì IMU −0.2°, bánh xe −0.1°, nhưng EKF −5.2°.
 
 ## Build
 
 ```bash
-cd ~/ros2_paper
+cd ~/Documents/carrierbot_ws
 colcon build --packages-select carrierbot_guidance_test
 source install/setup.bash
 ```

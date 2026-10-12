@@ -59,9 +59,12 @@ def generate_launch_description():
         # STM32 hien tai: ca hai banh duong = tien (thu ngay 12/10/2026), nen lenh de +1, +1.
         arg('left_command_sign', '1', 'Dau lenh banh trai gui xuong STM32 (0x030)'),
         arg('right_command_sign', '1', 'Dau lenh banh phai gui xuong STM32 (0x030)'),
-        arg('left_feedback_sign', '-1', 'Dau encoder banh trai doc ve (0x011)'),
+        # Da kiem chung 12/10/2026: dau trai = +1 thi /odom dung khi di thang
+        arg('left_feedback_sign', '1', 'Dau encoder banh trai doc ve (0x011)'),
         arg('right_feedback_sign', '1', 'Dau encoder banh phai doc ve (0x011)'),
         arg('imu_mode', '12', 'Che do BNO055: 12 = NDOF (co la ban), 8 = IMU (khong la ban)'),
+        arg('ekf_config', os.path.join(get_package_share_directory('carrierbot_guidance_test'), 'config', 'ekf_test.yaml'),
+            'File cau hinh EKF. Ban goc: carrierbot_slam/config/ekf.yaml'),
     ]
 
     # Phan cung: giong carrierbot_firmware/launch/hardware_interface.launch.py, nhung dung
@@ -122,7 +125,7 @@ def generate_launch_description():
         executable='ekf_node',
         name='ekf_filter_node',
         output='screen',
-        parameters=[os.path.join(get_package_share_directory('carrierbot_slam'), 'config', 'ekf.yaml')],
+        parameters=[LaunchConfiguration('ekf_config')],
     )
 
     odom_to_pose = Node(

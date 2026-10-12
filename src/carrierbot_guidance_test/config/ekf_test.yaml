@@ -1,0 +1,37 @@
+# EKF cho package test. Khac carrierbot_slam/config/ekf.yaml o cach gop goc huong:
+#  - Ban goc gop CA HAI goc tuyet doi: yaw banh xe (bat dau 0) va yaw IMU (theo la ban o mode 12).
+#    Hai goc khong cung goc nen EKF bi keo giua chung va tu troi khi xe chay
+#    (thu ngay 12/10/2026: di thang 2 m, IMU -0.2 do, banh xe -0.1 do, EKF -5.2 do).
+#  - Ban nay: banh xe chi dong gop VAN TOC (vx, vy, vyaw); goc huong lay tu IMU,
+#    tinh tuong doi so voi luc khoi dong (imu0_relative: true) de odom bat dau o 0 do.
+ekf_filter_node:
+  ros__parameters:
+    frequency: 30.0
+    sensor_timeout: 0.2
+    two_d_mode: true
+    publish_tf: true
+
+    map_frame: map
+    odom_frame: odom
+    base_link_frame: base_footprint
+    world_frame: odom
+
+    # Banh xe: chi van toc
+    odom0: /odom
+    odom0_config:
+          [ false, false, false,   # x, y, z
+            false, false, false,   # roll, pitch, yaw
+            true,  true,  false,   # vx, vy, vz
+            false, false, true,    # vroll, vpitch, vyaw
+            false, false, false ]  # ax, ay, az
+
+    # IMU: goc huong (tuong doi) + toc do quay
+    imu0: /imu/data
+    imu0_differential: false
+    imu0_relative: true
+    imu0_config:
+          [ false, false, false,
+            false, false, true,
+            false, false, false,
+            false, false, true,
+            false, false, false ]
