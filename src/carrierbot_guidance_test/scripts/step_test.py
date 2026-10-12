@@ -274,6 +274,16 @@ def run(args):
     return code
 
 
+def default_data_dir():
+    """Thu muc data/ cua package trong workspace (giong guidance_test_node); khong co thi thu muc hien tai."""
+    prefix = os.environ.get('COLCON_PREFIX_PATH', '').split(':')[0].rstrip('/')
+    if prefix.endswith('/install'):
+        path = os.path.join(prefix[:-len('/install')], 'src', 'carrierbot_guidance_test', 'data')
+        if os.path.isdir(path):
+            return path
+    return '.'
+
+
 def main():
     parser = argparse.ArgumentParser(description='Thu dap ung bac kenh quay, nhan dang K, L, tau.')
     parser.add_argument('--analyze', metavar='CSV', help='Chi phan tich file da ghi, khong chay xe')
@@ -286,7 +296,8 @@ def main():
     parser.add_argument('--extra-delay', type=float, default=0.0,
                         help='Tre them cua nguon tu the khi tinh PID (s), vd. 0.3 cho AMCL')
     parser.add_argument('--cmd-topic', default='/cmd_vel')
-    parser.add_argument('--out-dir', default='.', help='Thu muc luu CSV')
+    parser.add_argument('--out-dir', default=default_data_dir(),
+                        help='Thu muc luu CSV (mac dinh: src/carrierbot_guidance_test/data)')
     parser.add_argument('--yes', action='store_true', help='Khong hoi xac nhan truoc khi chay')
     argv = sys.argv[1:]
     try:
