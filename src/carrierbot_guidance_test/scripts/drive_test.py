@@ -106,9 +106,20 @@ class DriveTest(Node):
         return {k: t.total for k, t in self.yaw.items()}
 
 
-def drive_straight(node, distance, speed, min_speed):
+def yaw_changes(node, start):
+    """Góc đã quay (độ) theo từng nguồn kể từ snapshot `start`."""
+    return {k: math.degrees(node.yaw[k].total - start[k]) for k in node.yaw if node.yaw[k].count}
+
+
+def describe(changes):
+    names = {'ekf': 'EKF', 'imu': 'IMU', 'odom': 'banh xe'}
+    return ', '.join(f'{names[k]} {v:+.0f} do' for k, v in changes.items())
+
+
+def drive_straight(node, distance, speed, min_speed, max_yaw_deg):
     x0, y0 = node.position
-    deadline = time.monotonic() + distance / min_speed + 10.0
+    yaw0 = node.yaw_snapshot()
+    deadline = time.monotonic() + 2.0 * distance / speed + 8.0
     period = 0.05
     next_cmd = time.monotonic()
     while True:
@@ -116,7 +127,15 @@ def drive_straight(node, distance, speed, min_speed):
         if not node.ekf_fresh():
             raise RuntimeError('Mat du lieu /odometry/filtered qua 0.5 s')
         if time.monotonic() > deadline:
-            raise RuntimeError('Qua thoi gian cho phep khi di thang (xe co bi ket?)')
+            raise RuntimeError(
+                'Qua thoi gian cho phep khi di thang: odometry khong ghi nhan xe tien len. '
+                f'Goc da quay: {describe(yaw_changes(node, yaw0))}')
+        # An toàn: lệnh là đi thẳng mà xe lại quay -> dừng ngay
+        changes = yaw_changes(node, yaw0)
+        if any(abs(v) > max_yaw_deg for v in changes.values()):
+            raise RuntimeError(
+                f'Lenh la DI THANG nhung xe dang QUAY ({describe(changes)}). '
+                'Kiem tra chieu quay banh xe va dau cua IMU.')
         travelled = math.hypot(node.position[0] - x0, node.position[1] - y0)
         remaining = distance - travelled
         if remaining <= 0.005:
@@ -127,13 +146,15 @@ def drive_straight(node, distance, speed, min_speed):
             node.send(clamp(remaining * 1.0, min_speed, speed), 0.0)
 
 
-def rotate(node, angle, rate, min_rate, source):
+def rotate(node, angle, rate, min_rate, source, max_shift_m):
     tracker = node.yaw[source]
+    yaw0 = node.yaw_snapshot()
     start = tracker.total
+    x0, y0 = node.position
     target = abs(angle)
     sign = 1.0 if angle > 0 else -1.0
     t_start = time.monotonic()
-    deadline = t_start + target / min_rate + 10.0
+    deadline = t_start + 2.0 * target / rate + 8.0
     period = 0.05
     next_cmd = t_start
     count0 = tracker.count
@@ -141,10 +162,23 @@ def rotate(node, angle, rate, min_rate, source):
         rclpy.spin_once(node, timeout_sec=0.005)
         if not node.ekf_fresh():
             raise RuntimeError('Mat du lieu /odometry/filtered qua 0.5 s')
+        changes = yaw_changes(node, yaw0)
         if time.monotonic() > deadline:
-            raise RuntimeError('Qua thoi gian cho phep khi xoay (xe co bi ket?)')
+            raise RuntimeError(f'Qua thoi gian cho phep khi xoay. Goc da quay: {describe(changes)}')
         if time.monotonic() - t_start > 2.0 and tracker.count == count0:
             raise RuntimeError(f'Khong nhan duoc goc tu nguon "{source}"')
+        # An toàn: các nguồn góc lệch nhau quá 45 độ, hoặc một nguồn báo đã quay quá đích nhiều
+        spread = max(changes.values()) - min(changes.values()) if changes else 0.0
+        if spread > 45.0 or any(abs(v) > math.degrees(target) + 45.0 for v in changes.values()):
+            raise RuntimeError(
+                f'Cac nguon goc mau thuan nhau ({describe(changes)}). '
+                'Kiem tra dau cua IMU va odometry.')
+        # An toàn: lệnh là xoay tại chỗ mà xe lại chạy đi -> dừng ngay
+        shift = math.hypot(node.position[0] - x0, node.position[1] - y0)
+        if shift > max_shift_m:
+            raise RuntimeError(
+                f'Lenh la XOAY TAI CHO nhung odometry bao xe da di {shift:.2f} m. '
+                'Kiem tra chieu quay banh xe.')
         turned = abs(tracker.total - start)
         remaining = target - turned
         if remaining <= math.radians(0.5):
@@ -166,6 +200,8 @@ def main():
     parser.add_argument('--min-rate', type=float, default=0.08, help='Van toc goc nho nhat khi giam toc (rad/s)')
     parser.add_argument('--yaw-source', choices=['ekf', 'imu', 'odom'], default='ekf',
                         help='Nguon goc dung de quyet dinh khi nao dung xoay')
+    parser.add_argument('--max-yaw-straight', type=float, default=20.0,
+                        help='Dung khan cap neu xe quay qua goc nay (do) trong luc di thang')
     parser.add_argument('--cmd-topic', default='/cmd_vel')
     args = parser.parse_args(remove_ros_args(sys.argv)[1:])
 
@@ -198,7 +234,7 @@ def main():
             node.get_logger().info(f'Di thang {args.distance:.2f} m...')
             yaw0 = node.yaw_snapshot()
             x0, y0 = node.position
-            drive_straight(node, args.distance, args.speed, args.min_speed)
+            drive_straight(node, args.distance, args.speed, args.min_speed, args.max_yaw_straight)
             node.stop()
             node.spin_for(1.5)   # chờ xe dừng hẳn
             d = math.hypot(node.position[0] - x0, node.position[1] - y0)
@@ -211,7 +247,7 @@ def main():
         if args.turn != 0:
             node.get_logger().info(f'Xoay {args.turn:+.0f} do theo {args.yaw_source}...')
             yaw0 = node.yaw_snapshot()
-            rotate(node, math.radians(args.turn), args.rate, args.min_rate, args.yaw_source)
+            rotate(node, math.radians(args.turn), args.rate, args.min_rate, args.yaw_source, 0.3)
             node.stop()
             node.spin_for(1.5)
             yaw1 = node.yaw_snapshot()
