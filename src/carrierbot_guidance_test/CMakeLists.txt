@@ -33,6 +33,7 @@ install(
   PROGRAMS
     scripts/odom_to_pose.py
     scripts/send_route.py
+    scripts/drive_test.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
