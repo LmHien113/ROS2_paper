@@ -27,6 +27,7 @@ find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
+find_package(tf2_ros REQUIRED)
 
 add_library(carrierbot_los_pd_controller SHARED
   src/los_pd_controller.cpp
@@ -58,9 +59,11 @@ add_executable(fablab_guidance_node
 
 ament_target_dependencies(fablab_guidance_node
   geometry_msgs
+  nav_msgs
   rclcpp
   sensor_msgs
   std_msgs
+  tf2_ros
 )
 
 pluginlib_export_plugin_description_file(nav2_core carrierbot_los_pd_controller.xml)
